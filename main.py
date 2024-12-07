@@ -184,203 +184,207 @@ def restore_column_names(df):
     df.columns = df.columns.str.title().str.replace('_', ' ')
     return df
 
-# Data sources path
-data_sources_path = SCRIPT_DIR / 'data_sources'
+def main():
+    # Data sources path
+    data_sources_path = SCRIPT_DIR / 'data_sources'
 
-# Data import and renaming
-emails_df = standardize_column_names(pd.read_excel(data_sources_path / 'emails.xlsx'))
-products_df = standardize_column_names(pd.read_excel(data_sources_path / 'products.xlsx'))
-stores_df = standardize_column_names(pd.read_csv(data_sources_path / 'stores.csv'))
-sales_df = standardize_column_names(pd.read_excel(data_sources_path / 'sales.xlsx'))
+    # Data import and renaming
+    emails_df = standardize_column_names(pd.read_excel(data_sources_path / 'emails.xlsx'))
+    products_df = standardize_column_names(pd.read_excel(data_sources_path / 'products.xlsx'))
+    stores_df = standardize_column_names(pd.read_csv(data_sources_path / 'stores.csv'))
+    sales_df = standardize_column_names(pd.read_excel(data_sources_path / 'sales.xlsx'))
 
-# Ensure 'date' column is in datetime format
-sales_df['date'] = pd.to_datetime(sales_df['date'])
+    # Ensure 'date' column is in datetime format
+    sales_df['date'] = pd.to_datetime(sales_df['date'])
 
-# Get today's and yesterday's dates
-today = date.today()
-yesterday_date = today - timedelta(days=1)
+    # Get today's and yesterday's dates
+    today = date.today()
+    yesterday_date = today - timedelta(days=1)
 
-# Filter daily sales
-daily_sales_df = sales_df[sales_df['date'] == pd.Timestamp(yesterday_date)]
+    # Filter daily sales
+    daily_sales_df = sales_df[sales_df['date'] == pd.Timestamp(yesterday_date)]
 
-# Filter yearly sales
-current_year = yesterday_date.year
-yearly_sales_df = sales_df[(sales_df['date'].dt.year == current_year) & (sales_df['date'] <= pd.to_datetime(yesterday_date))]
+    # Filter yearly sales
+    current_year = yesterday_date.year
+    yearly_sales_df = sales_df[(sales_df['date'].dt.year == current_year) & (sales_df['date'] <= pd.to_datetime(yesterday_date))]
 
-## Indicator 1: Revenue
+    ## Indicator 1: Revenue
 
-# Daily
-daily_sales_df_merged = daily_sales_df.merge(products_df, on='product_id')[['sales_code', 'date', 'store_id', 'quantity', 'unit_price']]
-daily_sales_df_merged['revenue'] = daily_sales_df_merged['quantity'] * daily_sales_df_merged['unit_price']
-daily_revenue_df = daily_sales_df_merged.groupby('store_id')['revenue'].sum().reset_index(name='revenue')
+    # Daily
+    daily_sales_df_merged = daily_sales_df.merge(products_df, on='product_id')[['sales_code', 'date', 'store_id', 'quantity', 'unit_price']]
+    daily_sales_df_merged['revenue'] = daily_sales_df_merged['quantity'] * daily_sales_df_merged['unit_price']
+    daily_revenue_df = daily_sales_df_merged.groupby('store_id')['revenue'].sum().reset_index(name='revenue')
 
-# Yearly
-yearly_sales_df_merged = yearly_sales_df.merge(products_df, on='product_id')[['sales_code', 'date', 'store_id', 'quantity', 'unit_price']]
-yearly_sales_df_merged['revenue'] = yearly_sales_df_merged['quantity'] * yearly_sales_df_merged['unit_price']
-yearly_revenue_df = yearly_sales_df_merged.groupby('store_id')['revenue'].sum().reset_index(name='revenue')
+    # Yearly
+    yearly_sales_df_merged = yearly_sales_df.merge(products_df, on='product_id')[['sales_code', 'date', 'store_id', 'quantity', 'unit_price']]
+    yearly_sales_df_merged['revenue'] = yearly_sales_df_merged['quantity'] * yearly_sales_df_merged['unit_price']
+    yearly_revenue_df = yearly_sales_df_merged.groupby('store_id')['revenue'].sum().reset_index(name='revenue')
 
-## Indicator 2: Product Diversity
+    ## Indicator 2: Product Diversity
 
-# Daily
-daily_distinct_products_df = daily_sales_df.groupby('store_id')['product_id'].nunique().reset_index(name='distinct_products')
+    # Daily
+    daily_distinct_products_df = daily_sales_df.groupby('store_id')['product_id'].nunique().reset_index(name='distinct_products')
 
-# Yearly
-yearly_distinct_products_df = yearly_sales_df.groupby('store_id')['product_id'].nunique().reset_index(name='distinct_products')
+    # Yearly
+    yearly_distinct_products_df = yearly_sales_df.groupby('store_id')['product_id'].nunique().reset_index(name='distinct_products')
 
-## Indicator 3: Average Ticket per Sale
+    ## Indicator 3: Average Ticket per Sale
 
-# Daily
-daily_distinct_sales_df = daily_sales_df.groupby('store_id')['sales_code'].nunique().reset_index(name='distinct_sales')
-daily_avg_ticket_df = daily_revenue_df.merge(daily_distinct_sales_df, on='store_id')
-daily_avg_ticket_df['avg_ticket'] = (daily_avg_ticket_df['revenue'] / daily_avg_ticket_df['distinct_sales'])
+    # Daily
+    daily_distinct_sales_df = daily_sales_df.groupby('store_id')['sales_code'].nunique().reset_index(name='distinct_sales')
+    daily_avg_ticket_df = daily_revenue_df.merge(daily_distinct_sales_df, on='store_id')
+    daily_avg_ticket_df['avg_ticket'] = (daily_avg_ticket_df['revenue'] / daily_avg_ticket_df['distinct_sales'])
 
-# Yearly
-yearly_distinct_sales_df = yearly_sales_df.groupby('store_id')['sales_code'].nunique().reset_index(name='distinct_sales')
-yearly_avg_ticket_df = yearly_revenue_df.merge(yearly_distinct_sales_df, on='store_id')
-yearly_avg_ticket_df['avg_ticket'] = (yearly_avg_ticket_df['revenue'] / yearly_avg_ticket_df['distinct_sales'])
+    # Yearly
+    yearly_distinct_sales_df = yearly_sales_df.groupby('store_id')['sales_code'].nunique().reset_index(name='distinct_sales')
+    yearly_avg_ticket_df = yearly_revenue_df.merge(yearly_distinct_sales_df, on='store_id')
+    yearly_avg_ticket_df['avg_ticket'] = (yearly_avg_ticket_df['revenue'] / yearly_avg_ticket_df['distinct_sales'])
 
-## Combine all KPIs into summary DataFrames
+    ## Combine all KPIs into summary DataFrames
 
-# Daily KPIs
-daily_kpis_df = daily_revenue_df.merge(daily_distinct_products_df, on='store_id')
-daily_kpis_df = daily_kpis_df.merge(daily_avg_ticket_df[['store_id', 'avg_ticket']], on='store_id')
+    # Daily KPIs
+    daily_kpis_df = daily_revenue_df.merge(daily_distinct_products_df, on='store_id')
+    daily_kpis_df = daily_kpis_df.merge(daily_avg_ticket_df[['store_id', 'avg_ticket']], on='store_id')
 
-# Yearly KPIs
-yearly_kpis_df = yearly_revenue_df.merge(yearly_distinct_products_df, on='store_id')
-yearly_kpis_df = yearly_kpis_df.merge(yearly_avg_ticket_df[['store_id', 'avg_ticket']], on='store_id')
+    # Yearly KPIs
+    yearly_kpis_df = yearly_revenue_df.merge(yearly_distinct_products_df, on='store_id')
+    yearly_kpis_df = yearly_kpis_df.merge(yearly_avg_ticket_df[['store_id', 'avg_ticket']], on='store_id')
 
-# Merging both Daily and Yearly
-all_kpis_df = daily_kpis_df.merge(yearly_kpis_df, on='store_id', suffixes=('_daily', '_yearly'))
+    # Merging both Daily and Yearly
+    all_kpis_df = daily_kpis_df.merge(yearly_kpis_df, on='store_id', suffixes=('_daily', '_yearly'))
 
-## Email Sending
+    ## Email Sending
 
-# Get personal email from .env file
-email_to = os.getenv('EMAIL_TO')
+    # Get personal email from .env file
+    email_to = os.getenv('EMAIL_TO')
 
-# Change dataframe emails to personal email for testing
-emails_df['email'] = emails_df['email'].str.replace(
-    r"email\+(.*?)@address\.com",  # Regex to extract manager name
-    lambda match: f"{email_to.split('@')[0]}+{match.group(1)}@{email_to.split('@')[1]}",
-    regex=True
-)
-emails_with_kpis_df = emails_df.merge(stores_df, on='store_id', how='left').merge(all_kpis_df, on='store_id', how='left')
+    # Change dataframe emails to personal email for testing
+    emails_df['email'] = emails_df['email'].str.replace(
+        r"email\+(.*?)@address\.com",  # Regex to extract manager name
+        lambda match: f"{email_to.split('@')[0]}+{match.group(1)}@{email_to.split('@')[1]}",
+        regex=True
+    )
+    emails_with_kpis_df = emails_df.merge(stores_df, on='store_id', how='left').merge(all_kpis_df, on='store_id', how='left')
 
-for row in emails_with_kpis_df.itertuples():
-    if row.store_id == 'BOARD':
-        continue
-    
-    manager_name = row.manager.split(' ')[0]
-    store_name = row.store_name
-    store_id = row.store_id
-    email_to = row.email
+    for row in emails_with_kpis_df.itertuples():
+        if row.store_id == 'BOARD':
+            continue
+        
+        manager_name = row.manager.split(' ')[0]
+        store_name = row.store_name
+        store_id = row.store_id
+        email_to = row.email
 
-    daily_kpis = construct_kpi_list(row, DAILY_TARGETS, 'daily')
-    yearly_kpis = construct_kpi_list(row, YEARLY_TARGETS, 'yearly')
+        daily_kpis = construct_kpi_list(row, DAILY_TARGETS, 'daily')
+        yearly_kpis = construct_kpi_list(row, YEARLY_TARGETS, 'yearly')
 
-    daily_table = format_kpi_table(daily_kpis, 'Daily Values')
-    yearly_table = format_kpi_table(yearly_kpis, 'Yearly Values', is_yearly=True)
+        daily_table = format_kpi_table(daily_kpis, 'Daily Values')
+        yearly_table = format_kpi_table(yearly_kpis, 'Yearly Values', is_yearly=True)
 
-    subject = f'OnePage {yesterday_date.strftime(r'%Y/%m/%d')} - {store_name}'
+        subject = f'OnePage {yesterday_date.strftime(r'%Y/%m/%d')} - {store_name}'
+        email_body = f'''
+        <style>
+            body, table, p, td {{
+                font-family: Calibri, sans-serif;
+            }}
+        </style>  
+        <p>Good Morning, {manager_name}</p>
+        <p>Yesterday's result ({yesterday_date.strftime(r'%m/%d')}) of {store_name} was:</p>
+        <table style='width: 100%; border-collapse: collapse;'>
+            <tr>
+                <td style='width: 50%; vertical-align: top; padding: 10px;'>
+                    {daily_table}
+                </td>
+                <td style='width: 50%; vertical-align: top; padding: 10px;'>
+                    {yearly_table}
+                </td>
+            </tr>
+        </table>
+        <p>Please find attached the spreadsheet with all the data for further details.</p>
+        <p>Should you have any questions, feel free to reach out.</p>
+        <br>
+        <p>Best Regards,</p>
+        <p>Enrico Petrucci</p>
+        '''
+
+        # Generate and Save the Year-to-Date Excel File
+        store_name_safe = store_name.casefold().replace(' ', '_')
+        backup_dir = SCRIPT_DIR / 'store_backup_files' / store_name_safe
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Filter sales data for the store and enrich with additional details 
+        yearly_sales_df_filtered = yearly_sales_df[yearly_sales_df['store_id'] == store_id]
+        yearly_sales_df_filtered = yearly_sales_df_filtered.merge(products_df, on='product_id').merge(stores_df, on='store_id')
+        yearly_sales_df_filtered['date'] = yearly_sales_df_filtered['date'].dt.strftime(r'%Y/%m/%d')
+
+        # Select and rename columns for clarity
+        yearly_sales_df_filtered = yearly_sales_df_filtered[['sales_code', 'date', 'product_name', 'store_name', 'quantity', 'unit_price']]
+        yearly_sales_df_filtered = restore_column_names(yearly_sales_df_filtered)
+        
+        # Save the backup .xlsx file
+        ytd_file_path = backup_dir / f'{store_name_safe}_sales.xlsx'
+        yearly_sales_df_filtered.to_excel(ytd_file_path, index=False) # Fixed filename for overwriting
+        
+        # Send email with Attachment
+        send_email(EMAIL_FROM, email_to, subject, email_body, file_paths=[ytd_file_path])
+        # break
+        time.sleep(2)
+
+    # Board of Directors - Email
+
+    ranking_daily_df, best_daily_store, best_daily_store_revenue, worst_daily_store, worst_daily_store_revenue = get_ranking_info(
+        daily_revenue_df.merge(stores_df, on='store_id')
+    )
+    ranking_yearly_df, best_yearly_store, best_yearly_store_revenue, worst_yearly_store, worst_yearly_store_revenue = get_ranking_info(
+        yearly_revenue_df.merge(stores_df, on='store_id')
+    )
+
+    # Ensure directory for rankings
+    ranking_dir = SCRIPT_DIR / 'store_backup_files' / 'board_of_directors'
+    ranking_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate and save ranking files
+    daily_export_path = ranking_dir / f'daily_ranking_{yesterday_date.strftime(r'%Y_%m_%d')}.xlsx'
+    ranking_daily_df = restore_column_names(ranking_daily_df)
+    ranking_daily_df.to_excel(daily_export_path, index=False)
+
+    yearly_export_path = ranking_dir / f'yearly_ranking_{yesterday_date.year}.xlsx'
+    ranking_yearly_df = restore_column_names(ranking_yearly_df)
+    ranking_yearly_df.to_excel(yearly_export_path, index=False)
+
+    # Email Sending
+    email_to = emails_df.loc[emails_df['store_id'] == 'BOARD', 'email'].iloc[0]
+    subject = f'Daily and YTD Store Revenue Rankings - {yesterday_date.strftime(r'%Y/%m/%d')}'
     email_body = f'''
-    <style>
-        body, table, p, td {{
-            font-family: Calibri, sans-serif;
-        }}
-    </style>  
-    <p>Good Morning, {manager_name}</p>
-    <p>Yesterday's result ({yesterday_date.strftime(r'%m/%d')}) of {store_name} was:</p>
-    <table style='width: 100%; border-collapse: collapse;'>
-        <tr>
-            <td style='width: 50%; vertical-align: top; padding: 10px;'>
-                {daily_table}
-            </td>
-            <td style='width: 50%; vertical-align: top; padding: 10px;'>
-                {yearly_table}
-            </td>
-        </tr>
-    </table>
-    <p>Please find attached the spreadsheet with all the data for further details.</p>
-    <p>Should you have any questions, feel free to reach out.</p>
-    <br>
-    <p>Best Regards,</p>
-    <p>Enrico Petrucci</p>
+        <style>
+            body, table, p, td, li {{
+                font-family: Calibri, sans-serif;
+            }}
+        </style>
+        <p>Dear Board,</p>
+
+        <p>We are pleased to share the revenue performance rankings for our stores:</p>
+
+        <p><b>Daily Performance (Date: {yesterday_date.strftime(r'%m/%d')}):</b></p>
+        <ul>
+            <li><span style='color: green;'>Best Store:</span> <b>{best_daily_store}</b> with a revenue of <b>${best_daily_store_revenue:,.2f}</b>.</li>
+            <li><span style='color: red;'>Worst Store:</span> <b>{worst_daily_store}</b> with a revenue of <b>${worst_daily_store_revenue:,.2f}</b>.</li>
+        </ul>
+
+        <p><b>YTD Performance (Year: {yesterday_date.year}):</b></p>
+        <ul>
+            <li><span style='color: green;'>Best Store:</span> <b>{best_yearly_store}</b> with a revenue of <b>${best_yearly_store_revenue:,.2f}</b>.</li>
+            <li><span style='color: red;'>Worst Store:</span> <b>{worst_yearly_store}</b> with a revenue of <b>${worst_yearly_store_revenue:,.2f}</b>.</li>
+        </ul>
+
+        <p>The detailed daily and yearly rankings are attached for your review.</p>
+
+        <p>Should you have any questions, feel free to reach out.</p>
+
+        <p>Best regards,</p>
+        <p>Enrico Petrucci</p>
     '''
+    send_email(EMAIL_FROM, email_to, subject, email_body, file_paths=[daily_export_path, yearly_export_path])
 
-    # Generate and Save the Year-to-Date Excel File
-    store_name_safe = store_name.casefold().replace(' ', '_')
-    backup_dir = SCRIPT_DIR / 'store_backup_files' / store_name_safe
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Filter sales data for the store and enrich with additional details 
-    yearly_sales_df_filtered = yearly_sales_df[yearly_sales_df['store_id'] == store_id]
-    yearly_sales_df_filtered = yearly_sales_df_filtered.merge(products_df, on='product_id').merge(stores_df, on='store_id')
-    yearly_sales_df_filtered['date'] = yearly_sales_df_filtered['date'].dt.strftime(r'%Y/%m/%d')
-
-    # Select and rename columns for clarity
-    yearly_sales_df_filtered = yearly_sales_df_filtered[['sales_code', 'date', 'product_name', 'store_name', 'quantity', 'unit_price']]
-    yearly_sales_df_filtered = restore_column_names(yearly_sales_df_filtered)
-    
-    # Save the backup .xlsx file
-    ytd_file_path = backup_dir / f'{store_name_safe}_sales.xlsx'
-    yearly_sales_df_filtered.to_excel(ytd_file_path, index=False) # Fixed filename for overwriting
-    
-    # Send email with Attachment
-    send_email(EMAIL_FROM, email_to, subject, email_body, file_paths=[ytd_file_path])
-    # break
-    time.sleep(2)
-
-# Board of Directors - Email
-
-ranking_daily_df, best_daily_store, best_daily_store_revenue, worst_daily_store, worst_daily_store_revenue = get_ranking_info(
-    daily_revenue_df.merge(stores_df, on='store_id')
-)
-ranking_yearly_df, best_yearly_store, best_yearly_store_revenue, worst_yearly_store, worst_yearly_store_revenue = get_ranking_info(
-    yearly_revenue_df.merge(stores_df, on='store_id')
-)
-
-# Ensure directory for rankings
-ranking_dir = SCRIPT_DIR / 'store_backup_files' / 'board_of_directors'
-ranking_dir.mkdir(parents=True, exist_ok=True)
-
-# Generate and save ranking files
-daily_export_path = ranking_dir / f'daily_ranking_{yesterday_date.strftime(r'%Y_%m_%d')}.xlsx'
-ranking_daily_df = restore_column_names(ranking_daily_df)
-ranking_daily_df.to_excel(daily_export_path, index=False)
-
-yearly_export_path = ranking_dir / f'yearly_ranking_{yesterday_date.year}.xlsx'
-ranking_yearly_df = restore_column_names(ranking_yearly_df)
-ranking_yearly_df.to_excel(yearly_export_path, index=False)
-
-# Email Sending
-email_to = emails_df.loc[emails_df['store_id'] == 'BOARD', 'email'].iloc[0]
-subject = f'Daily and YTD Store Revenue Rankings - {yesterday_date.strftime(r'%Y/%m/%d')}'
-email_body = f'''
-    <style>
-        body, table, p, td, li {{
-            font-family: Calibri, sans-serif;
-        }}
-    </style>
-    <p>Dear Board,</p>
-
-    <p>We are pleased to share the revenue performance rankings for our stores:</p>
-
-    <p><b>Daily Performance (Date: {yesterday_date.strftime(r'%m/%d')}):</b></p>
-    <ul>
-        <li><span style='color: green;'>Best Store:</span> <b>{best_daily_store}</b> with a revenue of <b>${best_daily_store_revenue:,.2f}</b>.</li>
-        <li><span style='color: red;'>Worst Store:</span> <b>{worst_daily_store}</b> with a revenue of <b>${worst_daily_store_revenue:,.2f}</b>.</li>
-    </ul>
-
-    <p><b>YTD Performance (Year: {yesterday_date.year}):</b></p>
-    <ul>
-        <li><span style='color: green;'>Best Store:</span> <b>{best_yearly_store}</b> with a revenue of <b>${best_yearly_store_revenue:,.2f}</b>.</li>
-        <li><span style='color: red;'>Worst Store:</span> <b>{worst_yearly_store}</b> with a revenue of <b>${worst_yearly_store_revenue:,.2f}</b>.</li>
-    </ul>
-
-    <p>The detailed daily and yearly rankings are attached for your review.</p>
-
-    <p>Should you have any questions, feel free to reach out.</p>
-
-    <p>Best regards,</p>
-    <p>Enrico Petrucci</p>
-'''
-send_email(EMAIL_FROM, email_to, subject, email_body, file_paths=[daily_export_path, yearly_export_path])
+if __name__ == '__main__':
+    main()
