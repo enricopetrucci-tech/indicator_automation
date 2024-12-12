@@ -6,7 +6,6 @@ data_sources_portuguese/
 
 # Ignore example files and temporary assets
 example.JPG
-gabarito.ipynb
 onepage.png
 project_description.ipynb
 planning.txt
