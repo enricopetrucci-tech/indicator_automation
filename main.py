@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from pathlib import Path
 import os
+import psutil
 import time
 
 from dotenv import load_dotenv
@@ -22,7 +23,7 @@ DAILY_TARGETS = {
     'avg_ticket': 500
 }
 
-YEARLY_TARGETS = {
+YTD_TARGETS = {
     'revenue': 1_650_000,
     'distinct_products': 120,
     'avg_ticket': 500
@@ -40,7 +41,7 @@ def construct_kpi_list(row, targets, period):
     Args:
         row (pd.Series): A row of the DataFrame containing KPI values.
         targets (dict): A dictionary of target values for the KPIs (e.g., revenue, distinct_products, avg_ticket).
-        period (str): The period for the KPIs ('daily', 'yearly').
+        period (str): The period for the KPIs ('daily', 'YTD').
 
     Returns:
         list: A list of dictionaries, each representing a KPI with its name, value, target and type.
@@ -51,14 +52,14 @@ def construct_kpi_list(row, targets, period):
         {'name': 'Avg Ticket', 'value': getattr(row, f'avg_ticket_{period}'), 'target': targets['avg_ticket'], 'type': 'currency'}
     ]
 
-def format_kpi_table(kpis, title, is_yearly=False):
+def format_kpi_table(kpis, title, is_YTD=False):
     '''
     Formats a KPI table as an HTML string.
 
     Args:
         kpis (list): A list of dictionaries representing KPIs.
         title (str): The title of the table (e.g., 'Daily Values').
-        is_yearly (bool): Whether the KPIs are yearly. Default is False.
+        is_YTD (bool): Whether the KPIs are YTD. Default is False.
     
     Returns:
         str: An HTML string for the table.
@@ -78,7 +79,7 @@ def format_kpi_table(kpis, title, is_yearly=False):
             </tr>
         </thead>
         <tbody>
-    '''.format('Year Value' if is_yearly else 'Day Value')
+    '''.format('Year Value' if is_YTD else 'Day Value')
 
     for kpi in kpis:
         value = f'${kpi['value']:,.2f}' if kpi['type'] == 'currency' else f'{int(kpi['value'])}'
@@ -204,9 +205,9 @@ def main():
     # Filter daily sales
     daily_sales_df = sales_df[sales_df['date'] == pd.Timestamp(yesterday_date)]
 
-    # Filter yearly sales
+    # Filter YTD sales
     current_year = yesterday_date.year
-    yearly_sales_df = sales_df[(sales_df['date'].dt.year == current_year) & (sales_df['date'] <= pd.to_datetime(yesterday_date))]
+    ytd_sales_df = sales_df[(sales_df['date'].dt.year == current_year) & (sales_df['date'] <= pd.to_datetime(yesterday_date))]
 
     ## Indicator 1: Revenue
 
@@ -215,18 +216,18 @@ def main():
     daily_sales_df_merged['revenue'] = daily_sales_df_merged['quantity'] * daily_sales_df_merged['unit_price']
     daily_revenue_df = daily_sales_df_merged.groupby('store_id')['revenue'].sum().reset_index(name='revenue')
 
-    # Yearly
-    yearly_sales_df_merged = yearly_sales_df.merge(products_df, on='product_id')[['sales_code', 'date', 'store_id', 'quantity', 'unit_price']]
-    yearly_sales_df_merged['revenue'] = yearly_sales_df_merged['quantity'] * yearly_sales_df_merged['unit_price']
-    yearly_revenue_df = yearly_sales_df_merged.groupby('store_id')['revenue'].sum().reset_index(name='revenue')
+    # YTD
+    ytd_sales_df_merged = ytd_sales_df.merge(products_df, on='product_id')[['sales_code', 'date', 'store_id', 'quantity', 'unit_price']]
+    ytd_sales_df_merged['revenue'] = ytd_sales_df_merged['quantity'] * ytd_sales_df_merged['unit_price']
+    ytd_revenue_df = ytd_sales_df_merged.groupby('store_id')['revenue'].sum().reset_index(name='revenue')
 
     ## Indicator 2: Product Diversity
 
     # Daily
     daily_distinct_products_df = daily_sales_df.groupby('store_id')['product_id'].nunique().reset_index(name='distinct_products')
 
-    # Yearly
-    yearly_distinct_products_df = yearly_sales_df.groupby('store_id')['product_id'].nunique().reset_index(name='distinct_products')
+    # YTD
+    ytd_distinct_products_df = ytd_sales_df.groupby('store_id')['product_id'].nunique().reset_index(name='distinct_products')
 
     ## Indicator 3: Average Ticket per Sale
 
@@ -235,10 +236,10 @@ def main():
     daily_avg_ticket_df = daily_revenue_df.merge(daily_distinct_sales_df, on='store_id')
     daily_avg_ticket_df['avg_ticket'] = (daily_avg_ticket_df['revenue'] / daily_avg_ticket_df['distinct_sales'])
 
-    # Yearly
-    yearly_distinct_sales_df = yearly_sales_df.groupby('store_id')['sales_code'].nunique().reset_index(name='distinct_sales')
-    yearly_avg_ticket_df = yearly_revenue_df.merge(yearly_distinct_sales_df, on='store_id')
-    yearly_avg_ticket_df['avg_ticket'] = (yearly_avg_ticket_df['revenue'] / yearly_avg_ticket_df['distinct_sales'])
+    # YTD
+    ytd_distinct_sales_df = ytd_sales_df.groupby('store_id')['sales_code'].nunique().reset_index(name='distinct_sales')
+    ytd_avg_ticket_df = ytd_revenue_df.merge(ytd_distinct_sales_df, on='store_id')
+    ytd_avg_ticket_df['avg_ticket'] = (ytd_avg_ticket_df['revenue'] / ytd_avg_ticket_df['distinct_sales'])
 
     ## Combine all KPIs into summary DataFrames
 
@@ -246,12 +247,12 @@ def main():
     daily_kpis_df = daily_revenue_df.merge(daily_distinct_products_df, on='store_id')
     daily_kpis_df = daily_kpis_df.merge(daily_avg_ticket_df[['store_id', 'avg_ticket']], on='store_id')
 
-    # Yearly KPIs
-    yearly_kpis_df = yearly_revenue_df.merge(yearly_distinct_products_df, on='store_id')
-    yearly_kpis_df = yearly_kpis_df.merge(yearly_avg_ticket_df[['store_id', 'avg_ticket']], on='store_id')
+    # YTD KPIs
+    ytd_kpis_df = ytd_revenue_df.merge(ytd_distinct_products_df, on='store_id')
+    ytd_kpis_df = ytd_kpis_df.merge(ytd_avg_ticket_df[['store_id', 'avg_ticket']], on='store_id')
 
-    # Merging both Daily and Yearly
-    all_kpis_df = daily_kpis_df.merge(yearly_kpis_df, on='store_id', suffixes=('_daily', '_yearly'))
+    # Merging both Daily and YTD
+    all_kpis_df = daily_kpis_df.merge(ytd_kpis_df, on='store_id', suffixes=('_daily', '_YTD'))
 
     ## Email Sending
 
@@ -276,10 +277,10 @@ def main():
         email_to = row.email
 
         daily_kpis = construct_kpi_list(row, DAILY_TARGETS, 'daily')
-        yearly_kpis = construct_kpi_list(row, YEARLY_TARGETS, 'yearly')
+        ytd_kpis = construct_kpi_list(row, YTD_TARGETS, 'YTD')
 
         daily_table = format_kpi_table(daily_kpis, 'Daily Values')
-        yearly_table = format_kpi_table(yearly_kpis, 'Yearly Values', is_yearly=True)
+        ytd_table = format_kpi_table(ytd_kpis, 'YTD Values', is_YTD=True)
 
         subject = f'OnePage {yesterday_date.strftime(r'%Y/%m/%d')} - {store_name}'
         email_body = f'''
@@ -296,7 +297,7 @@ def main():
                     {daily_table}
                 </td>
                 <td style='width: 50%; vertical-align: top; padding: 10px;'>
-                    {yearly_table}
+                    {ytd_table}
                 </td>
             </tr>
         </table>
@@ -313,30 +314,29 @@ def main():
         backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Filter sales data for the store and enrich with additional details 
-        yearly_sales_df_filtered = yearly_sales_df[yearly_sales_df['store_id'] == store_id]
-        yearly_sales_df_filtered = yearly_sales_df_filtered.merge(products_df, on='product_id').merge(stores_df, on='store_id')
-        yearly_sales_df_filtered['date'] = yearly_sales_df_filtered['date'].dt.strftime(r'%Y/%m/%d')
+        ytd_sales_df_filtered = ytd_sales_df[ytd_sales_df['store_id'] == store_id]
+        ytd_sales_df_filtered = ytd_sales_df_filtered.merge(products_df, on='product_id').merge(stores_df, on='store_id')
+        ytd_sales_df_filtered['date'] = ytd_sales_df_filtered['date'].dt.strftime(r'%Y/%m/%d')
 
         # Select and rename columns for clarity
-        yearly_sales_df_filtered = yearly_sales_df_filtered[['sales_code', 'date', 'product_name', 'store_name', 'quantity', 'unit_price']]
-        yearly_sales_df_filtered = restore_column_names(yearly_sales_df_filtered)
+        ytd_sales_df_filtered = ytd_sales_df_filtered[['sales_code', 'date', 'product_name', 'store_name', 'quantity', 'unit_price']]
+        ytd_sales_df_filtered = restore_column_names(ytd_sales_df_filtered)
         
         # Save the backup .xlsx file
-        ytd_file_path = backup_dir / f'{store_name_safe}_sales.xlsx'
-        yearly_sales_df_filtered.to_excel(ytd_file_path, index=False) # Fixed filename for overwriting
+        ytd_file_path = backup_dir / f'{store_name_safe}_{yesterday_date.strftime(r'%Y_%m_%d')}_sales.xlsx'
+        ytd_sales_df_filtered.to_excel(ytd_file_path, index=False)
         
         # Send email with Attachment
         send_email(EMAIL_FROM, email_to, subject, email_body, file_paths=[ytd_file_path])
         # break
-        time.sleep(2)
 
     # Board of Directors - Email
 
     ranking_daily_df, best_daily_store, best_daily_store_revenue, worst_daily_store, worst_daily_store_revenue = get_ranking_info(
         daily_revenue_df.merge(stores_df, on='store_id')
     )
-    ranking_yearly_df, best_yearly_store, best_yearly_store_revenue, worst_yearly_store, worst_yearly_store_revenue = get_ranking_info(
-        yearly_revenue_df.merge(stores_df, on='store_id')
+    ranking_ytd_df, best_ytd_store, best_ytd_store_revenue, worst_ytd_store, worst_ytd_store_revenue = get_ranking_info(
+        ytd_revenue_df.merge(stores_df, on='store_id')
     )
 
     # Ensure directory for rankings
@@ -348,9 +348,9 @@ def main():
     ranking_daily_df = restore_column_names(ranking_daily_df)
     ranking_daily_df.to_excel(daily_export_path, index=False)
 
-    yearly_export_path = ranking_dir / f'yearly_ranking_{yesterday_date.year}.xlsx'
-    ranking_yearly_df = restore_column_names(ranking_yearly_df)
-    ranking_yearly_df.to_excel(yearly_export_path, index=False)
+    ytd_export_path = ranking_dir / f'ytd_ranking_{yesterday_date.strftime(r'%Y_%m_%d')}.xlsx'
+    ranking_ytd_df = restore_column_names(ranking_ytd_df)
+    ranking_ytd_df.to_excel(ytd_export_path, index=False)
 
     # Email Sending
     email_to = emails_df.loc[emails_df['store_id'] == 'BOARD', 'email'].iloc[0]
@@ -373,18 +373,18 @@ def main():
 
         <p><b>YTD Performance (Year: {yesterday_date.year}):</b></p>
         <ul>
-            <li><span style='color: green;'>Best Store:</span> <b>{best_yearly_store}</b> with a revenue of <b>${best_yearly_store_revenue:,.2f}</b>.</li>
-            <li><span style='color: red;'>Worst Store:</span> <b>{worst_yearly_store}</b> with a revenue of <b>${worst_yearly_store_revenue:,.2f}</b>.</li>
+            <li><span style='color: green;'>Best Store:</span> <b>{best_ytd_store}</b> with a revenue of <b>${best_ytd_store_revenue:,.2f}</b>.</li>
+            <li><span style='color: red;'>Worst Store:</span> <b>{worst_ytd_store}</b> with a revenue of <b>${worst_ytd_store_revenue:,.2f}</b>.</li>
         </ul>
 
-        <p>The detailed daily and yearly rankings are attached for your review.</p>
+        <p>The detailed daily and YTD rankings are attached for your review.</p>
 
         <p>Should you have any questions, feel free to reach out.</p>
 
         <p>Best regards,</p>
         <p>Enrico Petrucci</p>
     '''
-    send_email(EMAIL_FROM, email_to, subject, email_body, file_paths=[daily_export_path, yearly_export_path])
+    send_email(EMAIL_FROM, email_to, subject, email_body, file_paths=[daily_export_path, ytd_export_path])
 
 if __name__ == '__main__':
     main()
