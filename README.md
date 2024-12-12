@@ -80,12 +80,11 @@ This project automates daily performance reporting for a fictional retail clothi
    - `pandas`: For data manipulation and analysis.
    - `python-dotenv`: To load environment variables securely.
    - `pywin32`: For automating Outlook email sending.
-   - `psutil`: To check if Outlook is running and manage system processes.
    - `openpyxl`: For reading and writing Excel files in the `.xlsx` format.
 
 Install the required libraries using pip:
 ```bash
-pip install pandas python-dotenv pywin32 psutil openpyxl
+pip install pandas python-dotenv pywin32 openpyxl
 ```
 3. **Additional Requirements**:
 - **Outlook**: You must have the classic desktop version of Microsoft Outlook installed and set up, as the "New Outlook" does not fully support automation.

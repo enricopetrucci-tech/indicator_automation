@@ -1,8 +1,6 @@
 from datetime import date, timedelta
 from pathlib import Path
 import os
-import psutil
-import time
 
 from dotenv import load_dotenv
 import win32com.client as win32
