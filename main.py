@@ -256,6 +256,8 @@ def main():
 
     # Get personal email from .env file
     email_to = os.getenv('EMAIL_TO')
+    if not email_to:
+        raise ValueError('EMAIL_TO environment variable is not set.')
 
     # Change dataframe emails to personal email for testing
     emails_df['email'] = emails_df['email'].str.replace(
