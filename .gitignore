@@ -14,3 +14,4 @@ project_description.txt
 # Ignore system and backup files
 .DS_Store
 Thumbs.db
+store_backup_files/
